@@ -1,22 +1,10 @@
 // src/src/pages/Calendar.tsx
 import React, { useMemo, useState } from "react";
-import dayjs, { Dayjs } from "dayjs";
-import jalaliday from "jalaliday";
-import isBetween from "dayjs/plugin/isBetween";
-import localizedFormat from "dayjs/plugin/localizedFormat";
-import customParseFormat from "dayjs/plugin/customParseFormat";
-import weekday from "dayjs/plugin/weekday";
+import DateObject from "react-date-object";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
 import { AppShell } from "../components/layout/AppShell";
-
-dayjs.extend(jalaliday);
-dayjs.extend(isBetween);
-dayjs.extend(localizedFormat);
-dayjs.extend(customParseFormat);
-dayjs.extend(weekday);
-
-// Persian locale + Jalali calendar
-dayjs.locale("fa");
-const toJ = (d?: Dayjs) => (d ?? dayjs()).calendar("jalali");
+import { formatJalaliMonthTitle } from "../lib/utils/jalali";
 
 // ---------- Types ----------
 type Stage =
@@ -90,7 +78,12 @@ const initialItems: CalendarItem[] = [
     title: "جلسه هماهنگی پروژه",
     projectId: "p1",
     personId: "u1",
-    date: dayjs().calendar("jalali").hour(10).minute(0).toDate().toISOString(),
+    date: (() => {
+      const d = toJ();
+      d.setHour(10);
+      d.setMinute(0);
+      return d.toDate().toISOString();
+    })(),
     note: "بررسی ریسک‌ها و مسیر تایید",
   },
   {
@@ -99,8 +92,16 @@ const initialItems: CalendarItem[] = [
     title: "واگذاری تحلیل بدنه",
     projectId: "p1",
     personId: "u2",
-    start: dayjs().calendar("jalali").subtract(1, "day").toDate().toISOString(),
-    end: dayjs().calendar("jalali").add(2, "day").toDate().toISOString(),
+    start: (() => {
+      const d = toJ();
+      d.subtract(1, "day");
+      return d.toDate().toISOString();
+    })(),
+    end: (() => {
+      const d = toJ();
+      d.add(2, "day");
+      return d.toDate().toISOString();
+    })(),
     stage: "در حال بررسی",
   },
   {
@@ -109,7 +110,11 @@ const initialItems: CalendarItem[] = [
     title: "ددلاین اصلاحات",
     projectId: "p2",
     personId: "u3",
-    date: dayjs().calendar("jalali").add(3, "day").toDate().toISOString(),
+    date: (() => {
+      const d = toJ();
+      d.add(3, "day");
+      return d.toDate().toISOString();
+    })(),
     stage: "بازگشت برای اصلاح",
   },
 ];
@@ -123,26 +128,58 @@ const COLORS: Record<ItemKind, string> = {
   رویداد: "#8b5cf6",
 };
 
-function sameDay(a: Dayjs, b: Dayjs) {
-  return a.startOf("day").isSame(b.startOf("day"));
-}
+type DateInput = string | number | Date | DateObject | undefined;
 
-function inRange(day: Dayjs, startISO?: string, endISO?: string) {
+const toJ = (value?: DateInput) =>
+  value instanceof DateObject
+    ? new DateObject(value)
+    : new DateObject({
+        date: value ?? new Date(),
+        calendar: persian,
+        locale: persian_fa,
+      });
+
+const startOfDay = (value: DateObject) => {
+  const next = toJ(value);
+  next.setHour(0);
+  next.setMinute(0);
+  next.setSecond(0);
+  next.setMillisecond(0);
+  return next;
+};
+
+const endOfDay = (value: DateObject) => {
+  const next = toJ(value);
+  next.setHour(23);
+  next.setMinute(59);
+  next.setSecond(59);
+  next.setMillisecond(999);
+  return next;
+};
+
+const startOfMonth = (value: DateObject) => {
+  const next = startOfDay(value);
+  next.setDay(1);
+  return next;
+};
+
+const sameDay = (a: DateObject, b: DateObject) =>
+  startOfDay(a).valueOf() === startOfDay(b).valueOf();
+
+const inRange = (day: DateObject, startISO?: string, endISO?: string) => {
   if (!startISO || !endISO) return false;
-  const s = dayjs(startISO);
-  const e = dayjs(endISO);
-  // TS doesn't know about isBetween, but runtime is fine because we extended the plugin
-  return (day as any).isBetween(s.startOf("day"), e.endOf("day"), "day", "[]");
-}
+  const s = startOfDay(toJ(startISO));
+  const e = endOfDay(toJ(endISO));
+  const target = startOfDay(day);
+  return target.valueOf() >= s.valueOf() && target.valueOf() <= e.valueOf();
+};
 
-function formatJ(dateISO?: string) {
-  if (!dateISO) return "";
-  return toJ(dayjs(dateISO)).format("YYYY/MM/DD HH:mm");
-}
+const formatJ = (iso?: string) =>
+  iso ? toJ(iso).format("YYYY/MM/DD HH:mm") : "";
 
 // ---------- Calendar Component ----------
 function CalendarView() {
-  const [currentMonth, setCurrentMonth] = useState<Dayjs>(toJ());
+  const [currentMonth, setCurrentMonth] = useState<DateObject>(() => toJ());
   const [items, setItems] = useState<CalendarItem[]>(initialItems);
   const [openDayISO, setOpenDayISO] = useState<string | null>(null);
 
@@ -159,13 +196,16 @@ function CalendarView() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Days grid (6 weeks) — start from Saturday
-  const jStartOfMonth = toJ(currentMonth).startOf("month");
-  // Compute Saturday offset manually (Dayjs: 0=Sunday,...6=Saturday)
-  const jsDay = jStartOfMonth.day(); // 0..6
+  const jStartOfMonth = startOfMonth(currentMonth);
+  const jsDay = jStartOfMonth.toDate().getDay();
   const offsetToSaturday = (jsDay + 1) % 7; // maps Sat(6)->0, Sun(0)->1, ...
-  const gridStart = jStartOfMonth.subtract(offsetToSaturday, "day");
-  const days: Dayjs[] = Array.from({ length: 42 }, (_, i) =>
-    gridStart.add(i, "day")
+  const gridStart = (() => {
+    const start = toJ(jStartOfMonth);
+    start.subtract(offsetToSaturday, "day");
+    return start;
+  })();
+  const days: DateObject[] = Array.from({ length: 42 }, (_, i) =>
+    toJ(gridStart).add(i, "day")
   );
 
   const handlePrev = () => setCurrentMonth((m) => toJ(m).subtract(1, "month"));
@@ -179,7 +219,7 @@ function CalendarView() {
       for (const d of days) {
         const iso = d.toDate().toISOString().slice(0, 10);
         const fallsIn =
-          (it.date && sameDay(d, dayjs(it.date))) ||
+          (it.date && sameDay(d, toJ(it.date))) ||
           inRange(d, it.start, it.end);
         if (fallsIn) {
           const arr = map.get(iso) ?? [];
@@ -191,9 +231,9 @@ function CalendarView() {
     return map;
   }, [items, days]);
 
-  const openForDay = (d: Dayjs) => setOpenDayISO(d.toDate().toISOString());
+  const openForDay = (d: DateObject) => setOpenDayISO(d.toDate().toISOString());
 
-  const startEditing = (it?: CalendarItem, defaultDate?: Dayjs) => {
+  const startEditing = (it?: CalendarItem, defaultDate?: DateObject) => {
     if (it) {
       setEditingId(it.id);
       setDraft({ ...it });
@@ -234,7 +274,7 @@ function CalendarView() {
     setItems((prev) => prev.filter((x) => x.id !== id));
   };
 
-  const monthTitle = toJ(currentMonth).format("YYYY MMMM");
+  const monthTitle = formatJalaliMonthTitle(currentMonth.toDate());
 
   return (
     <div className="p-6">
@@ -355,7 +395,7 @@ function CalendarView() {
               people={PEOPLE}
               projects={PROJECTS}
               onAdd={() => {
-                startEditing(undefined, dayjs(openDayISO));
+                startEditing(undefined, toJ(openDayISO));
               }}
               onEdit={(it) => startEditing(it)}
               onRemove={removeItem}
@@ -378,10 +418,11 @@ function CalendarView() {
                   setDraft((d) => ({
                     ...d,
                     start: d.date ?? toJ().toDate().toISOString(),
-                    end: dayjs(d.date ?? toJ().toISOString())
-                      .add(1, "day")
-                      .toDate()
-                      .toISOString(),
+                    end: (() => {
+                      const base = toJ(d.date ?? toJ().toISOString());
+                      base.add(1, "day");
+                      return base.toDate().toISOString();
+                    })(),
                     date: undefined,
                   }));
                 } else {
@@ -462,18 +503,16 @@ function DayDetail({
   onEdit: (it: CalendarItem) => void;
   onRemove: (id: string) => void;
 }) {
-  const day = dayjs(iso);
+  const day = toJ(iso);
   const inDay = items.filter(
-    (it) =>
-      (it.date && day.startOf("day").isSame(dayjs(it.date).startOf("day"))) ||
-      inRange(day, it.start, it.end)
+    (it) => (it.date && sameDay(day, toJ(it.date))) || inRange(day, it.start, it.end)
   );
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="text-sm text-gray-500">
-          {toJ(day).format("dddd، YYYY/MM/DD")}
+          {day.format("dddd، YYYY/MM/DD")}
         </div>
         <button
           className="px-3 py-1.5 rounded-lg bg-gray-900 text-white hover:opacity-90"
@@ -772,9 +811,16 @@ function EditForm({
 // ---------- datetime-local helpers ----------
 function toInputLocal(iso?: string) {
   if (!iso) return "";
-  const d = dayjs(iso);
-  return d.format("YYYY-MM-DDTHH:mm");
+  const date = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hour = pad(date.getHours());
+  const minute = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 function fromInputLocal(value: string) {
-  return dayjs(value).toDate().toISOString();
+  if (!value) return "";
+  return new Date(value).toISOString();
 }

@@ -8,15 +8,12 @@ import { Icon } from "../components/ui/Icon";
 import { mockSecurityLogs, mockUsers } from "../mocks/db";
 import { SecurityLog } from "../features/projects/types";
 
-import dayjs, { Dayjs } from "dayjs";
-import jalaliday from "jalaliday";
-import localizedFormat from "dayjs/plugin/localizedFormat";
-
-dayjs.extend(jalaliday);
-dayjs.extend(localizedFormat);
-dayjs.locale("fa");
-
-const toJ = (d: string | number | Date | Dayjs) => dayjs(d).calendar("jalali");
+import {
+  formatJalaliDate,
+  formatJalaliTime,
+  formatJalaliDateTime,
+  formatJalaliDateTimeLong,
+} from "../lib/utils/jalali";
 
 // رنگ شدت
 const severityColors: Record<string, string> = {
@@ -65,10 +62,10 @@ export function SecurityLogs() {
       render: (log) => (
         <div className="text-sm">
           <div className="font-medium text-gray-900">
-            {toJ(log.timestamp).format("YYYY/MM/DD")}
+            {formatJalaliDate(log.timestamp)}
           </div>
           <div className="text-gray-500">
-            {toJ(log.timestamp).format("HH:mm")}
+            {formatJalaliTime(log.timestamp)}
           </div>
         </div>
       ),
@@ -143,20 +140,16 @@ export function SecurityLogs() {
 
       // فیلتر بازه زمانی
       if (latestTimestamp && timeRange !== "all") {
-        const base = dayjs(latestTimestamp);
-        let threshold: Dayjs;
-
-        if (timeRange === "24h") {
-          threshold = base.subtract(24, "hour");
-        } else if (timeRange === "7d") {
-          threshold = base.subtract(7, "day");
-        } else {
-          // "30d"
-          threshold = base.subtract(30, "day");
-        }
-
-        const logTime = dayjs(log.timestamp);
-        if (logTime.isBefore(threshold)) ok = false;
+        const baseMs = latestTimestamp.getTime();
+        const offsets: Record<typeof timeRange, number> = {
+          "24h": 24 * 60 * 60 * 1000,
+          "7d": 7 * 24 * 60 * 60 * 1000,
+          "30d": 30 * 24 * 60 * 60 * 1000,
+          all: 0,
+        };
+        const thresholdMs = baseMs - offsets[timeRange];
+        const logTime = new Date(log.timestamp).getTime();
+        if (logTime < thresholdMs) ok = false;
       }
 
       // سرچ
@@ -204,7 +197,7 @@ export function SecurityLogs() {
         ? mockUsers.find((u) => u.id === log.userId)
         : undefined;
 
-      const timeStr = toJ(log.timestamp).format("YYYY/MM/DD HH:mm");
+      const timeStr = formatJalaliDateTime(log.timestamp);
 
       return [
         log.id,
@@ -517,9 +510,7 @@ export function SecurityLogs() {
                       زمان
                     </label>
                     <p className="text-gray-900 mt-1">
-                      {toJ(selectedLog.timestamp).format(
-                        "dddd، YYYY/MM/DD HH:mm"
-                      )}
+                      {formatJalaliDateTimeLong(selectedLog.timestamp)}
                     </p>
                   </div>
                   {selectedLog.userId && (

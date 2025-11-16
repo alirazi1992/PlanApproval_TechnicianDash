@@ -7,6 +7,7 @@ import { Icon } from "../components/ui/Icon";
 import { Donut } from "../components/charts/Donut";
 import { AreaSpark } from "../components/charts/AreaSpark";
 import { mockAvatars } from "../mocks/db";
+import { SupportCenterCard } from "../components/support/SupportCenterCard";
 import {
   WorkspaceProvider,
   useWorkspace,
@@ -216,29 +217,6 @@ const knowledgeBaseResources = [
   },
 ];
 
-const supportShortcuts = [
-  {
-    id: "ticket",
-    title: "ثبت تیکت",
-    detail: "برای هماهنگی با واحد پشتیبانی",
-  },
-  {
-    id: "chat",
-    title: "چت با مهندس آماده‌باش",
-    detail: "میانگین پاسخ‌گویی ۶ دقیقه",
-  },
-  {
-    id: "meeting",
-    title: "رزرو جلسه هم‌آهنگی",
-    detail: "انتخاب بازه ۳۰ دقیقه‌ای",
-  },
-  {
-    id: "secure-room",
-    title: "اتاق داده ایمن",
-    detail: "آپلود نقشه‌ها و مدارک حجیم",
-  },
-];
-
 type WorkflowAssignment = {
   id: string;
   utn: string;
@@ -325,7 +303,6 @@ function TechnicianDashboardView() {
 
   const [customAlerts, setCustomAlerts] = useState<CustomAlert[]>([]);
   const [pinnedResources, setPinnedResources] = useState<string[]>([]);
-  const [activeSupportId, setActiveSupportId] = useState<string | null>(null);
   const [activeTechnician, setActiveTechnician] = useState<any | null>(null);
 
   const [timeRange, setTimeRange] = useState<TimeRange>("today");
@@ -446,10 +423,6 @@ function TechnicianDashboardView() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
   };
-
-  const activeSupport = supportShortcuts.find(
-    (shortcut) => shortcut.id === activeSupportId
-  );
 
   const currentMetrics = metricsByRange[timeRange];
   const currentDonut = donutByRange[timeRange];
@@ -1097,38 +1070,7 @@ function TechnicianDashboardView() {
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4">
-            <div className="flex flex-row-reverse items-center justify-between">
-              <div className="text-right">
-                <h4 className="text-base font-semibold text-gray-900">
-                  پشتیبانی و سرویس
-                </h4>
-                <p className="text-xs text-gray-500 mt-1">
-                  تیم موفقیت مشتری همیشه آماده است
-                </p>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {supportShortcuts.map((shortcut) => (
-                <button
-                  key={shortcut.id}
-                  type="button"
-                  onClick={() => setActiveSupportId(shortcut.id)}
-                  className="w-full text-right rounded-2xl border border-gray-100 bg-white/95 px-4 py-3 flex items-center justify-between flex-row-reverse hover:bg-gray-50"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      {shortcut.title}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {shortcut.detail}
-                    </p>
-                  </div>
-                  <Icon name="chevronDown" size={16} className="rotate-90" />
-                </button>
-              ))}
-            </div>
-          </Card>
+          <SupportCenterCard />
         </section>
       </div>
 
@@ -1325,37 +1267,6 @@ function TechnicianDashboardView() {
               </Button>
               <Button variant="primary" size="sm" onClick={handleAddWorkflow}>
                 ذخیره و افزودن
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {activeSupport && (
-        <Modal
-          title={activeSupport.title}
-          onClose={() => setActiveSupportId(null)}
-        >
-          <div className="space-y-3 text-right text-sm text-gray-600">
-            <p>{activeSupport.detail}</p>
-            <p>
-              این یک نمای آزمایشی است. برای اتصال واقعی به سرویس پشتیبانی، API
-              اختصاصی بخش سرویس فراخوانی خواهد شد.
-            </p>
-            <div className="flex justify-end gap-2 flex-row-reverse mt-4">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setActiveSupportId(null)}
-              >
-                بستن
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setActiveSupportId(null)}
-              >
-                تایید
               </Button>
             </div>
           </div>
