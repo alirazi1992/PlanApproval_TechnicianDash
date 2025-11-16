@@ -13,15 +13,15 @@ import {
 } from "../mocks/db";
 import { AuditEvent } from "../features/projects/types";
 
-import dayjs, { Dayjs } from "dayjs";
-import jalaliday from "jalaliday";
-import localizedFormat from "dayjs/plugin/localizedFormat";
-
-dayjs.extend(jalaliday);
-dayjs.extend(localizedFormat);
-dayjs.locale("fa");
-
-const toJ = (d: string | number | Date | Dayjs) => dayjs(d).calendar("jalali");
+import DatePicker, { DateObject } from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
+import {
+  formatJalaliDate,
+  formatJalaliTime,
+  formatJalaliDateTimeLong,
+  formatJalaliMonthTitle,
+} from "../lib/utils/jalali";
 
 // لیبل فارسی برای اکشن‌ها
 const actionLabels: Record<string, string> = {
@@ -53,10 +53,10 @@ export function AuditLogs() {
       render: (event) => (
         <div className="text-sm">
           <div className="font-medium text-gray-900">
-            {toJ(event.timestamp).format("YYYY/MM/DD")}
+            {formatJalaliDate(event.timestamp)}
           </div>
           <div className="text-gray-500">
-            {toJ(event.timestamp).format("HH:mm")}
+            {formatJalaliTime(event.timestamp)}
           </div>
         </div>
       ),
@@ -208,7 +208,9 @@ export function AuditLogs() {
         ? mockAccessTokens.find((t) => t.id === ev.tokenId)
         : undefined;
 
-      const timeStr = toJ(ev.timestamp).format("YYYY/MM/DD HH:mm");
+      const timeStr = `${formatJalaliDate(ev.timestamp)} ${formatJalaliTime(
+        ev.timestamp
+      )}`;
 
       return [
         ev.id,
@@ -259,7 +261,9 @@ export function AuditLogs() {
           ? mockAccessTokens.find((t) => t.id === ev.tokenId)
           : undefined;
 
-        const timeStr = toJ(ev.timestamp).format("YYYY/MM/DD HH:mm");
+        const timeStr = `${formatJalaliDate(ev.timestamp)} ${formatJalaliTime(
+          ev.timestamp
+        )}`;
 
         return `
           <tr>
@@ -513,9 +517,7 @@ export function AuditLogs() {
                       زمان
                     </label>
                     <p className="text-gray-900 mt-1">
-                      {toJ(selectedEvent.timestamp).format(
-                        "dddd، YYYY/MM/DD HH:mm"
-                      )}
+                      {formatJalaliDateTimeLong(selectedEvent.timestamp)}
                     </p>
                   </div>
                   <div>
@@ -603,152 +605,49 @@ interface JalaliDatePickerProps {
   onChange: (value: string) => void;
 }
 
-const WEEKDAYS_FA = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
-
 function JalaliDatePicker({ label, value, onChange }: JalaliDatePickerProps) {
-  const [open, setOpen] = useState(false);
+  const pickerValue = value ? new DateObject(new Date(value)) : null;
 
-  const today = dayjs();
-  const initial = value ? dayjs(value) : today;
-  const [currentMonth, setCurrentMonth] = useState<Dayjs>(initial);
-
-  // محاسبه روزهای تقویم (بر اساس تقویم شمسـی، ولی دیتای زیرین میلادی است)
-  const jStartOfMonth = toJ(currentMonth).startOf("month");
-  const jsDay = jStartOfMonth.day(); // 0..6
-  const offsetToSaturday = (jsDay + 1) % 7; // تبدیل شروع هفته به شنبه
-  const gridStart = jStartOfMonth.subtract(offsetToSaturday, "day");
-  const days: Dayjs[] = Array.from({ length: 42 }, (_, i) =>
-    gridStart.add(i, "day")
-  );
-
-  const selected = value ? dayjs(value) : null;
-
-  const handleSelect = (d: Dayjs) => {
-    const isoDate = d.toDate().toISOString().slice(0, 10); // YYYY-MM-DD
+  const handleChange = (dateValue: DateObject | DateObject[] | null) => {
+    if (!dateValue || Array.isArray(dateValue)) {
+      onChange("");
+      return;
+    }
+    const isoDate = dateValue.toDate().toISOString().slice(0, 10);
     onChange(isoDate);
-    setOpen(false);
   };
-
-  const clearValue = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onChange("");
-  };
-
-  const monthTitle = toJ(currentMonth).format("MMMM YYYY");
-
-  const displayLabel = value
-    ? toJ(dayjs(value)).format("YYYY/MM/DD")
-    : "انتخاب تاریخ";
 
   return (
-    <div className="relative" dir="rtl">
+    <div className="text-right">
       <label className="block text-sm font-medium text-gray-700 mb-1.5">
         {label}
       </label>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-      >
-        <span className={`text-gray-700 ${!value ? "text-gray-400" : ""}`}>
-          {displayLabel}
-        </span>
-        <span className="flex items-center gap-1">
-          {value && (
-            <button
-              type="button"
-              onClick={clearValue}
-              className="w-5 h-5 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-              aria-label="حذف تاریخ"
-            >
-              ×
-            </button>
-          )}
-          <Icon name="calendar" size={16} className="text-gray-500" />
-        </span>
-      </button>
-
-      {open && (
-        <div className="absolute z-40 mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-lg p-3">
-          <div className="flex items-center justify-between mb-2">
-            <button
-              type="button"
-              onClick={() => setCurrentMonth((m) => m.subtract(1, "month"))}
-              className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100 text-gray-600"
-            >
-              ▶
-            </button>
-            <div className="text-sm font-semibold text-gray-900">
-              {monthTitle}
-            </div>
-            <button
-              type="button"
-              onClick={() => setCurrentMonth((m) => m.add(1, "month"))}
-              className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-gray-100 text-gray-600"
-            >
-              ◀
-            </button>
-          </div>
-
-          <div className="grid grid-cols-7 gap-1 text-xs text-gray-500 mb-1">
-            {WEEKDAYS_FA.map((w) => (
-              <div key={w} className="text-center py-1">
-                {w}
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-1 text-sm">
-            {days.map((d) => {
-              const inThisMonth = toJ(d).month() === toJ(currentMonth).month();
-              const isSelected =
-                selected && d.startOf("day").isSame(selected.startOf("day"));
-              const isToday = d.startOf("day").isSame(today.startOf("day"));
-
-              return (
-                <button
-                  key={d.valueOf()}
-                  type="button"
-                  onClick={() => handleSelect(d)}
-                  className={[
-                    "w-9 h-9 rounded-full flex items-center justify-center",
-                    inThisMonth ? "text-gray-800" : "text-gray-400",
-                    isSelected
-                      ? "bg-blue-600 text-white"
-                      : isToday
-                      ? "border border-blue-400"
-                      : "hover:bg-gray-100",
-                  ].join(" ")}
-                >
-                  {toJ(d).format("D")}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-2 flex justify-between items-center">
-            <button
-              type="button"
-              className="text-xs text-blue-600 hover:underline"
-              onClick={() => {
-                const t = dayjs();
-                setCurrentMonth(t);
-                const iso = t.toDate().toISOString().slice(0, 10);
-                onChange(iso);
-                setOpen(false);
-              }}
-            >
-              امروز
-            </button>
-            <button
-              type="button"
-              className="text-xs text-gray-500 hover:underline"
-              onClick={() => setOpen(false)}
-            >
-              بستن
-            </button>
-          </div>
-        </div>
+      <div className="relative">
+        <DatePicker
+          value={pickerValue}
+          onChange={handleChange}
+          calendar={persian}
+          locale={persian_fa}
+          inputClass="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="انتخاب تاریخ"
+          calendarPosition="bottom-right"
+          format="YYYY/MM/DD"
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            aria-label="حذف تاریخ"
+          >
+            ×
+          </button>
+        )}
+      </div>
+      {value && (
+        <p className="text-[11px] text-gray-500 mt-1">
+          {formatJalaliDate(value)}
+        </p>
       )}
     </div>
   );
